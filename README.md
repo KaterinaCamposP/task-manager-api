@@ -101,7 +101,7 @@ curl -X POST http://localhost:8080/api/auth/login
 - [x] GlobalExceptionHandler
 
 ### Sprint 1 — Pendiente
-- [ ] QA Tests (register, login, refresh, profile)
+- [x] QA Tests (register, login, refresh, profile)
 - [ ] Frontend UX (login, registro, dashboard, modal tarea)
 
 ### Sprint 2 — Próximo
@@ -112,10 +112,68 @@ curl -X POST http://localhost:8080/api/auth/login
 ---
 
 ## Estructura del proyecto
+```text
 src/main/java/com/katerinacampos/task_manager/
-├── controller/          # Endpoints REST
-├── dto/                 # Objetos de entrada/salida
-├── exception/           # Manejo global de errores
-├── model/               # Entidades JPA
-├── repository/          # Acceso a datos
-└── security/            # JWT, filtros, configuración
+src/
+├── main/
+│ ├── java/
+│ │ └── com/
+│ │ └── katerinacampos.task_manager/
+│ │ ├── controller/
+│ │ │ └── AuthController.java
+│ │ ├── dto/
+│ │ │ ├── AuthResponse.java
+│ │ │ ├── LoginRequest.java
+│ │ │ ├── RegisterRequest.java
+│ │ │ ├── TaskRequest.java
+│ │ │ ├── TaskResponse.java
+│ │ │ └── UserProfileResponse.java
+│ │ ├── exception/
+│ │ │ └── GlobalExceptionHandler.java
+│ │ ├── model/
+│ │ │ ├── Task.java
+│ │ │ ├── TaskStatus.java
+│ │ │ └── User.java
+│ │ ├── repository/
+│ │ │ ├── TaskRepository.java
+│ │ │ └── UserRepository.java
+│ │ └── security/
+│ │ ├── JwtAuthenticationFilter.java
+│ │ ├── JwtService.java
+│ │ ├── SecurityConfig.java
+│ │ ├── TaskManagerApplication.java
+│ │ └── taskmanager.api
+│ └── resources/
+└── test/
+└── java/
+└── com.katerinacampos.task_manager/
+└── controller/
+│       └── AuthControllerTest.java
+└── TaskManagerApplicationTests.java
+```
+## Testing
+
+### Ejecutar tests
+
+### Tests incluidos — Sprint 1
+Los tests de integración usan `@SpringBootTest` con MockMvc y se ejecutan contra la base de datos local.
+
+**Registro:**
+- Registro exitoso retorna accessToken, refreshToken y tokenType Bearer
+- Email duplicado retorna 400
+- Password menor a 6 caracteres retorna 400
+- Email con formato inválido retorna 400
+- Username vacío retorna 400
+
+**Login:**
+- Login exitoso retorna accessToken y tokenType Bearer
+- Credenciales incorrectas retorna 4xx
+
+**Profile:**
+- Sin token retorna 401
+- Con token válido retorna email y username del usuario
+
+### Notas técnicas
+- `@AutoConfigureMockMvc` no existe en Spring Boot 4.x — se construye MockMvc manualmente con `MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build()`
+- Limpieza de BD antes de cada test con `userRepository.findByEmail().ifPresent(delete)`
+- Tests corren contra PostgreSQL local, no H2 en memoria
