@@ -37,6 +37,11 @@ Se agregaron `findByUsername` y `existsByUsername` durante el desarrollo
 para explorar autenticación por username. No se usan actualmente pero
 se mantienen para uso futuro.
 
+### CORS habilitado para frontend
+Se configuró CORS en `SecurityConfig` para permitir requests desde
+`http://localhost:5173` (Vite dev server). Métodos permitidos:
+GET, POST, PUT, DELETE, PATCH. Para producción se debe actualizar
+con la URL de Vercel o el dominio del frontend.
 ---
 
 ## Configuración local
@@ -100,9 +105,9 @@ curl -X POST http://localhost:8080/api/auth/login
 - [x] AuthController — register, login, refresh, profile
 - [x] GlobalExceptionHandler
 
-### Sprint 1 — Pendiente
+### Sprint 1 — Listo!
 - [x] QA Tests (register, login, refresh, profile)
-- [ ] Frontend UX (login, registro, dashboard, modal tarea)
+- [x] Frontend UX (login, registro, dashboard, modal tarea)
 
 ### Sprint 2 — Próximo
 - [ ] CRUD completo de tareas
