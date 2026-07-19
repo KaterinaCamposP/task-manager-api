@@ -29,7 +29,10 @@ private WebApplicationContext context;
 @Autowired
 private com.katerinacampos.task_manager.repository.UserRepository userRepository;
 
-private MockMvc mockMvc; 
+@Autowired
+private com.katerinacampos.task_manager.repository.TaskRepository taskRepository;
+
+private MockMvc mockMvc;
 
     @BeforeEach
     void setup() {
@@ -37,9 +40,15 @@ private MockMvc mockMvc;
                 .webAppContextSetup(context)
                 .apply(springSecurity())
                 .build();
-        // limpieza
-        userRepository.findByEmail("katerina@test.com").ifPresent(userRepository::delete);
-        userRepository.findByEmail("duplicado@test.com").ifPresent(userRepository::delete);
+
+        userRepository.findByEmail("katerina@test.com").ifPresent(user -> {
+            taskRepository.deleteAllByUserIdNative(user.getId());
+            userRepository.delete(user);
+        });
+        userRepository.findByEmail("duplicado@test.com").ifPresent(user -> {
+            taskRepository.deleteAllByUserIdNative(user.getId());
+            userRepository.delete(user);
+        });
     }
 
     // ─── REGISTER ────────────────────────────────────────────

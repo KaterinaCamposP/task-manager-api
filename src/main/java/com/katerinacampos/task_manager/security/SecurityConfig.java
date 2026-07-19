@@ -1,5 +1,6 @@
 package com.katerinacampos.task_manager.security;
 
+import com.katerinacampos.task_manager.model.User;
 import com.katerinacampos.task_manager.repository.UserRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,8 +54,15 @@ public class SecurityConfig {
 
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> userRepository.findByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+        return email -> {
+            User user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+            return org.springframework.security.core.userdetails.User
+                    .withUsername(user.getEmail())
+                    .password(user.getPassword())
+                    .authorities(java.util.Collections.emptyList())
+                    .build();
+        };
     }
 
     @Bean

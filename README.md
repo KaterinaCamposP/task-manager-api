@@ -42,6 +42,20 @@ Se configuró CORS en `SecurityConfig` para permitir requests desde
 `http://localhost:5173` (Vite dev server). Métodos permitidos:
 GET, POST, PUT, DELETE, PATCH. Para producción se debe actualizar
 con la URL de Vercel o el dominio del frontend.
+
+### UserDetailsService — email como username interno
+Se detectó que JwtAuthenticationFilter fallaba (403 en /api/tasks) porque
+el JWT usa el email como subject, pero User.getUsername() devuelve el
+username elegido por el usuario, no el email. Se corrigió userDetailsService()
+en SecurityConfig para envolver la entidad en un UserDetails de Spring Security
+cuyo getUsername() devuelve el email, alineándolo con el subject del token.
+
+### Soft delete y borrado físico en tests
+@SQLDelete intercepta cualquier borrado de Task (incluido deleteAll()) y lo
+convierte siempre en UPDATE deleted_at = NOW(), nunca en DELETE real. Para
+limpiar la BD de test antes de cada @BeforeEach, se agregó un método con
+@Query(nativeQuery = true) + @Modifying + @Transactional en TaskRepository
+que ejecuta un DELETE SQL puro, evitando el conflicto de FK con users.
 ---
 
 ## Configuración local
@@ -88,7 +102,23 @@ curl -X POST http://localhost:8080/api/auth/register
 curl -X POST http://localhost:8080/api/auth/login 
 -H "Content-Type: application/json" 
 -d '{"email":"katerina@test.com","password":"123456"}'
+---
+## Endpoints Sprint 2 — Tasks
 
+| Método | Endpoint | Auth | Descripción |
+|--------|----------|------|-------------|
+| POST | /api/tasks | Bearer | Crear tarea (title obligatorio, status PENDING por defecto) |
+| GET | /api/tasks | Bearer | Listar tareas del usuario autenticado |
+| GET | /api/tasks/{id} | Bearer | Obtener una tarea por ID (valida propiedad) |
+| PUT | /api/tasks/{id} | Bearer | Actualizar title, description y status |
+| DELETE | /api/tasks/{id} | Bearer | Soft delete (setea deleted_at) |
+| PATCH | /api/tasks/{id}/status | Bearer | Alterna status entre PENDING y COMPLETED |
+
+### Ejemplo crear tarea
+curl -X POST http://localhost:8080/api/tasks \
+-H "Authorization: Bearer {tu_access_token}" \
+-H "Content-Type: application/json" \
+-d '{"title":"Primera tarea","description":"Probando el CRUD"}'
 ---
 
 ## Estado del proyecto
@@ -109,51 +139,68 @@ curl -X POST http://localhost:8080/api/auth/login
 - [x] QA Tests (register, login, refresh, profile)
 - [x] Frontend UX (login, registro, dashboard, modal tarea)
 
-### Sprint 2 — Próximo
-- [ ] CRUD completo de tareas
-- [ ] Soft delete
-- [ ] Validaciones
+### Sprint 2 — Backend y QA completados
+- [x] POST /api/tasks
+- [x] GET /api/tasks
+- [x] GET /api/tasks/{id}
+- [x] PUT /api/tasks/{id}
+- [x] DELETE /api/tasks/{id}
+- [x] PATCH /api/tasks/{id}/status
+- [x] Validaciones @Valid en TaskRequest
+- [x] Auditoría automática (@CreatedDate/@LastModifiedDate)
+- [x] TaskMapper con MapStruct
+- [x] Soft delete con @SQLDelete + @SQLRestriction
+- [x] QA Tests (CRUD completo, validaciones, seguridad, soft delete)
+
+### Sprint 2 — Pendiente
+- [ ] Frontend UX: conectar dashboard al CRUD real
+- [ ] Frontend UX: editar/eliminar tarea desde UI
+- [ ] Frontend UX: toggle de estado
+- [ ] Frontend UX: feedback visual (loading, toasts)
+
+### Sprint 3 — Próximo
+- [ ] Paginación, filtros, ordenamiento
+- [ ] Redis blacklist para logout
+- [ ] Swagger/OpenAPI
 
 ---
 
 ## Estructura del proyecto
 ```text
 src/main/java/com/katerinacampos/task_manager/
-src/
-├── main/
-│ ├── java/
-│ │ └── com/
-│ │ └── katerinacampos.task_manager/
-│ │ ├── controller/
-│ │ │ └── AuthController.java
-│ │ ├── dto/
-│ │ │ ├── AuthResponse.java
-│ │ │ ├── LoginRequest.java
-│ │ │ ├── RegisterRequest.java
-│ │ │ ├── TaskRequest.java
-│ │ │ ├── TaskResponse.java
-│ │ │ └── UserProfileResponse.java
-│ │ ├── exception/
-│ │ │ └── GlobalExceptionHandler.java
-│ │ ├── model/
-│ │ │ ├── Task.java
-│ │ │ ├── TaskStatus.java
-│ │ │ └── User.java
-│ │ ├── repository/
-│ │ │ ├── TaskRepository.java
-│ │ │ └── UserRepository.java
-│ │ └── security/
-│ │ ├── JwtAuthenticationFilter.java
-│ │ ├── JwtService.java
-│ │ ├── SecurityConfig.java
-│ │ ├── TaskManagerApplication.java
-│ │ └── taskmanager.api
-│ └── resources/
-└── test/
-└── java/
-└── com.katerinacampos.task_manager/
-└── controller/
-│       └── AuthControllerTest.java
+├── controller/
+│   ├── AuthController.java
+│   └── TaskController.java
+├── dto/
+│   ├── AuthResponse.java
+│   ├── LoginRequest.java
+│   ├── RegisterRequest.java
+│   ├── TaskRequest.java
+│   ├── TaskResponse.java
+│   └── UserProfileResponse.java
+├── exception/
+│   └── GlobalExceptionHandler.java
+├── mapper/
+│   └── TaskMapper.java
+├── model/
+│   ├── Task.java
+│   ├── TaskStatus.java
+│   └── User.java
+├── repository/
+│   ├── TaskRepository.java
+│   └── UserRepository.java
+├── security/
+│   ├── JwtAuthenticationFilter.java
+│   ├── JwtService.java
+│   └── SecurityConfig.java
+├── service/
+│   └── TaskService.java
+└── TaskManagerApplication.java
+
+src/test/java/com/katerinacampos/task_manager/
+├── controller/
+│   ├── AuthControllerTest.java
+│   └── TaskControllerTest.java
 └── TaskManagerApplicationTests.java
 ```
 ## Testing
@@ -178,7 +225,19 @@ Los tests de integración usan `@SpringBootTest` con MockMvc y se ejecutan contr
 - Sin token retorna 401
 - Con token válido retorna email y username del usuario
 
+### Tests incluidos — Sprint 2
+
+**CRUD de tareas:**
+- Crear, listar, obtener por ID, actualizar, eliminar y cambiar estado (flujo completo)
+- Título vacío o menor a 3 caracteres retorna 400
+- ID inexistente retorna error
+- Sin token retorna 401/403
+
+**Soft delete:**
+- Tarea eliminada no aparece en el listado (filtrada por @SQLRestriction)
+
 ### Notas técnicas
 - `@AutoConfigureMockMvc` no existe en Spring Boot 4.x — se construye MockMvc manualmente con `MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build()`
 - Limpieza de BD antes de cada test con `userRepository.findByEmail().ifPresent(delete)`
 - Tests corren contra PostgreSQL local, no H2 en memoria
+- `@SQLDelete` intercepta cualquier borrado de `Task` (incluido `deleteAll()`) y lo convierte en `UPDATE deleted_at = NOW()`. Para limpiar la BD en tests, `TaskRepository` usa un `@Query(nativeQuery = true)` con `@Modifying @Transactional` que ejecuta un `DELETE` SQL puro
