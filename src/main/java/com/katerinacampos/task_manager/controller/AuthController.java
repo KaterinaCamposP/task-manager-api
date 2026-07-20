@@ -12,9 +12,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import com.katerinacampos.task_manager.service.TokenBlacklistService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.Collections;
 
+@Tag(name = "Autenticación", description = "Registro, login, refresh y perfil de usuario")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -24,19 +28,21 @@ public class AuthController {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     public AuthController(UserRepository userRepository,
                           PasswordEncoder passwordEncoder,
                           JwtService jwtService,
                           AuthenticationManager authenticationManager,
-                          UserDetailsService userDetailsService) {
+                          UserDetailsService userDetailsService, TokenBlacklistService tokenBlacklistService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
-
+    @Operation(summary = "Registrar nuevo usuario", description = "Crea una cuenta y retorna tokens JWT")
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -62,6 +68,7 @@ public class AuthController {
         ));
     }
 
+    @Operation(summary = "Iniciar sesión", description = "Valida credenciales y retorna tokens JWT")
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         authenticationManager.authenticate(
@@ -83,6 +90,7 @@ public class AuthController {
         ));
     }
 
+    @Operation(summary = "Renovar access token", description = "Usa el token actual para generar uno nuevo")
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@RequestHeader("Authorization") String authHeader) {
         String token = authHeader.substring(7);
@@ -98,6 +106,7 @@ public class AuthController {
         ));
     }
 
+    @Operation(summary = "Obtener perfil", description = "Retorna datos del usuario autenticado")
     @GetMapping("/profile")
     public ResponseEntity<UserProfileResponse> profile(
             @RequestHeader("Authorization") String authHeader) {
@@ -112,5 +121,16 @@ public class AuthController {
                 user.getEmail(),
                 user.getCreatedAt()
         ));
+    }
+
+    @Operation(summary = "Cerrar sesión", description = "Invalida el token actual agregándolo a la blacklist de Redis")
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.substring(7);
+        long remaining = jwtService.getRemainingExpiration(token);
+        if (remaining > 0) {
+            tokenBlacklistService.blacklist(token, remaining);
+        }
+        return ResponseEntity.ok().build();
     }
 }

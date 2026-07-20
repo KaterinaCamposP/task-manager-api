@@ -8,6 +8,7 @@ API REST para gestión de tareas personales con autenticación JWT.
 
 ## Decisiones técnicas y desviaciones del backlog
 
+## Sprint 1
 ### Spring Boot 4.0.7 en vez de 3.3.x
 El backlog especifica Spring Boot 3.3. Al momento de iniciar el proyecto
 (julio 2026), start.spring.io solo ofrecía versiones 4.x estables.
@@ -43,6 +44,7 @@ Se configuró CORS en `SecurityConfig` para permitir requests desde
 GET, POST, PUT, DELETE, PATCH. Para producción se debe actualizar
 con la URL de Vercel o el dominio del frontend.
 
+## Sprint 2
 ### UserDetailsService — email como username interno
 Se detectó que JwtAuthenticationFilter fallaba (403 en /api/tasks) porque
 el JWT usa el email como subject, pero User.getUsername() devuelve el
@@ -56,6 +58,34 @@ convierte siempre en UPDATE deleted_at = NOW(), nunca en DELETE real. Para
 limpiar la BD de test antes de cada @BeforeEach, se agregó un método con
 @Query(nativeQuery = true) + @Modifying + @Transactional en TaskRepository
 que ejecuta un DELETE SQL puro, evitando el conflicto de FK con users.
+
+## Sprint 3
+### Redis vía WSL2 en desarrollo local
+El backlog no especifica cómo instalar Redis. Como Redis no tiene soporte
+nativo oficial en Windows, se instaló dentro de WSL2 (Ubuntu) en vez de
+usar Docker o una alternativa como Memurai. La app Spring Boot corre en
+Windows y se conecta a `localhost:6379`, que WSL2 expone automáticamente
+al host de Windows sin configuración adicional.
+
+### Blacklist de tokens con TTL automático
+Al hacer logout, el access token se guarda en Redis con `SET` + expiración
+igual al tiempo de vida restante del token (`getRemainingExpiration()` en
+JwtService). Redis borra la clave automáticamente cuando expira, sin
+necesidad de un job de limpieza. JwtAuthenticationFilter consulta la
+blacklist antes de validar cualquier token.
+
+### Paginación como objeto Page en vez de PagedModel
+GET /api/tasks devuelve directamente `Page<TaskResponse>`. Spring emite un
+warning recomendando envolver la respuesta en `PagedModel` (vía
+`@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)`) para mayor
+estabilidad del JSON a futuro. Se decidió no aplicarlo por ahora ya que
+`Page` funciona correctamente y el backlog no exige ese nivel de refinamiento;
+queda como mejora opcional.
+
+### Rutas públicas de Swagger en SecurityConfig
+Swagger UI requirió agregar explícitamente `/swagger-ui.html`, `/swagger-ui/**`,
+`/v3/api-docs/**` y `/v3/api-docs.yaml` como rutas públicas — el patrón
+`/swagger-ui/**` por sí solo no cubre la URL exacta `/swagger-ui.html`.
 ---
 
 ## Configuración local
@@ -64,6 +94,7 @@ que ejecuta un DELETE SQL puro, evitando el conflicto de FK con users.
 - Java 17
 - PostgreSQL 16
 - Maven
+- Redis (via WSL2/Ubuntu, Docker, o Memurai)
 
 ### Variables de entorno
 Crear archivo `.env` en la raíz del proyecto:
@@ -102,6 +133,7 @@ curl -X POST http://localhost:8080/api/auth/register
 curl -X POST http://localhost:8080/api/auth/login 
 -H "Content-Type: application/json" 
 -d '{"email":"katerina@test.com","password":"123456"}'
+
 ---
 ## Endpoints Sprint 2 — Tasks
 
@@ -119,8 +151,24 @@ curl -X POST http://localhost:8080/api/tasks \
 -H "Authorization: Bearer {tu_access_token}" \
 -H "Content-Type: application/json" \
 -d '{"title":"Primera tarea","description":"Probando el CRUD"}'
----
 
+---
+## Endpoints Sprint 3 — Paginación, filtros y logout
+
+| Método | Endpoint | Auth | Descripción |
+|--------|----------|------|-------------|
+| GET | /api/tasks?page=&size=&sort= | Bearer | Lista paginada y ordenable |
+| GET | /api/tasks?status=PENDING | Bearer | Filtra por estado |
+| POST | /api/auth/logout | Bearer | Invalida el token actual (blacklist Redis) |
+
+### Ejemplo paginación + orden + filtro
+curl http://localhost:8080/api/tasks?page=0&size=5&sort=title,desc&status=PENDING \
+-H "Authorization: Bearer {tu_access_token}"
+
+### Documentación interactiva (Swagger)
+http://localhost:8080/swagger-ui/index.html
+
+---
 ## Estado del proyecto
 
 ### Sprint 1 — Backend Auth completado
@@ -152,22 +200,34 @@ curl -X POST http://localhost:8080/api/tasks \
 - [x] Soft delete con @SQLDelete + @SQLRestriction
 - [x] QA Tests (CRUD completo, validaciones, seguridad, soft delete)
 
-### Sprint 2 — Pendiente
-- [ ] Frontend UX: conectar dashboard al CRUD real
-- [ ] Frontend UX: editar/eliminar tarea desde UI
-- [ ] Frontend UX: toggle de estado
-- [ ] Frontend UX: feedback visual (loading, toasts)
+### Sprint 2 — Frontend
+- [x] Frontend UX: conectar dashboard al CRUD real
+- [x] Frontend UX: editar/eliminar tarea desde UI
+- [x] Frontend UX: toggle de estado
+- [ ] Frontend UX: feedback visual (loading, toasts) — movido a Sprint 4
 
-### Sprint 3 — Próximo
-- [ ] Paginación, filtros, ordenamiento
-- [ ] Redis blacklist para logout
-- [ ] Swagger/OpenAPI
+### Sprint 3 — Backend completado
+- [x] GET /api/tasks con paginación (Pageable + metadata)
+- [x] GET /api/tasks con ordenamiento (sort=campo,asc|desc)
+- [x] GET /api/tasks con filtrado por status
+- [x] POST /api/auth/logout con blacklist Redis (TTL automático)
+- [x] Configurar Redis (WSL2 + spring-boot-starter-data-redis)
+- [x] CORS (ya cubierto desde Sprint 1)
+- [x] OpenAPI/Swagger con @Tag y @Operation
+- [x] Variables de entorno REDIS_HOST/REDIS_PORT
+
+### Sprint 3 — Pendiente
+- [ ] Índice user_id + status (verificar si ya existe de Sprint 1)
+- [ ] QA Tests (paginación, ordenamiento, filtrado, seguridad, coverage JaCoCo)
+- [ ] Frontend: paginación UI, ordenamiento, filtros, dashboard con tarjetas resumen, responsive, logout
 
 ---
 
 ## Estructura del proyecto
 ```text
 src/main/java/com/katerinacampos/task_manager/
+├── config/
+│   └── RedisConfig.java
 ├── controller/
 │   ├── AuthController.java
 │   └── TaskController.java
@@ -194,8 +254,13 @@ src/main/java/com/katerinacampos/task_manager/
 │   ├── JwtService.java
 │   └── SecurityConfig.java
 ├── service/
-│   └── TaskService.java
+│   ├── TaskService.java
+│   └── TokenBlacklistService.java
 └── TaskManagerApplication.java
+
+src/main/resources/db/migration/
+├── V1__init.sql
+└── V2__add_index_created_at.sql
 
 src/test/java/com/katerinacampos/task_manager/
 ├── controller/

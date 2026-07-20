@@ -90,7 +90,7 @@ public class TaskControllerTest {
         mockMvc.perform(get("/api/tasks")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].title").value("Tarea de test"));
+                .andExpect(jsonPath("$.content[0].title").value("Tarea de test"));
 
         // GET BY ID
         mockMvc.perform(get("/api/tasks/" + taskId)
@@ -128,7 +128,7 @@ public class TaskControllerTest {
         mockMvc.perform(get("/api/tasks")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.content").isEmpty());
     }
 
     // ─── VALIDACIONES ────────────────────────────────────────
@@ -208,7 +208,7 @@ public class TaskControllerTest {
         // No debe aparecer en el listado (filtrado por @SQLRestriction)
         mockMvc.perform(get("/api/tasks")
                         .header("Authorization", "Bearer " + token))
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.content").isEmpty());
 
         // Pero sigue existiendo físicamente en la BD (fuera del filtro de Hibernate)
         boolean existsInDb = taskRepository.findById(taskId).isEmpty(); // esto SÍ respeta @SQLRestriction

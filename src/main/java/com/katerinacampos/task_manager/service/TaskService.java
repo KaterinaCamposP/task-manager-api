@@ -10,6 +10,8 @@ import com.katerinacampos.task_manager.repository.TaskRepository;
 import com.katerinacampos.task_manager.repository.UserRepository;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -42,12 +44,12 @@ public class TaskService {
         return taskMapper.toResponse(taskRepository.save(task));
     }
 
-    public List<TaskResponse> getAll(String email) {
+    public Page<TaskResponse> getAll(String email, TaskStatus status, Pageable pageable) {
         User user = getUser(email);
-        return taskRepository.findByUserId(user.getId())
-                .stream()
-                .map(taskMapper::toResponse)
-                .toList();
+        Page<Task> page = (status != null)
+                ? taskRepository.findByUserIdAndStatus(user.getId(), status, pageable)
+                : taskRepository.findByUserId(user.getId(), pageable);
+        return page.map(taskMapper::toResponse);
     }
 
     public TaskResponse getById(String email, Long id) {
