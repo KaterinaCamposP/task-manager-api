@@ -28,6 +28,7 @@ public class JwtService {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(user.getUsername())
+                .id(java.util.UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(jwtExpirationMillis)))
                 .signWith(getSigningKey())
@@ -38,6 +39,7 @@ public class JwtService {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(user.getUsername())
+                .id(java.util.UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(jwtRefreshExpirationMillis)))
                 .signWith(getSigningKey())
