@@ -86,6 +86,15 @@ queda como mejora opcional.
 Swagger UI requirió agregar explícitamente `/swagger-ui.html`, `/swagger-ui/**`,
 `/v3/api-docs/**` y `/v3/api-docs.yaml` como rutas públicas — el patrón
 `/swagger-ui/**` por sí solo no cubre la URL exacta `/swagger-ui.html`.
+
+### Índice user_id + status creado antes de tiempo (Sprint 1)
+El backlog pide este índice explícitamente en Sprint 3 ("optimizar filtrado
+por estado"), pero ya existía desde la migración V1__init.sql de Sprint 1.
+No fue una anticipación planificada — el prompt de esa migración pidió
+"índices básicos" de forma genérica y el resultado generado incluyó tanto
+`idx_task_user_id` como `idx_task_user_id_status` sin que Sprint 1 lo
+exigiera puntualmente. Se documenta aquí para mantener trazabilidad honesta
+entre lo planificado y lo que realmente ocurrió.
 ---
 
 ## Configuración local
@@ -215,9 +224,9 @@ http://localhost:8080/swagger-ui/index.html
 - [x] CORS (ya cubierto desde Sprint 1)
 - [x] OpenAPI/Swagger con @Tag y @Operation
 - [x] Variables de entorno REDIS_HOST/REDIS_PORT
+- [x] Índice user_id + status (verificar si ya existe de Sprint 1)
 
 ### Sprint 3 — Pendiente
-- [ ] Índice user_id + status (verificar si ya existe de Sprint 1)
 - [ ] QA Tests (paginación, ordenamiento, filtrado, seguridad, coverage JaCoCo)
 - [ ] Frontend: paginación UI, ordenamiento, filtros, dashboard con tarjetas resumen, responsive, logout
 
