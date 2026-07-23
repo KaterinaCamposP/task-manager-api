@@ -95,6 +95,21 @@ No fue una anticipación planificada — el prompt de esa migración pidió
 `idx_task_user_id` como `idx_task_user_id_status` sin que Sprint 1 lo
 exigiera puntualmente. Se documenta aquí para mantener trazabilidad honesta
 entre lo planificado y lo que realmente ocurrió.
+
+## Sprint 4
+### Dockerfile multi-stage (Sprint 4)
+Dos stages: Maven+JDK para compilar, solo JRE para ejecutar, así la imagen
+final no carga con Maven ni el código fuente. El `pom.xml` se copia antes
+que `src/` para cachear dependencias. Los tests se excluyen del build
+(`-DskipTests`) por ser de integración y se corren aparte con `./mvnw test`.
+
+### docker-compose con servicios internos (Sprint 4)
+Levanta app + PostgreSQL + Redis en una red interna. `db` y `redis` no
+exponen puertos al host para no chocar con el PostgreSQL de Windows ni el
+Redis de WSL. Las variables `SPRING_DATASOURCE_URL`/`SPRING_DATA_REDIS_HOST`
+apuntan a los nombres de servicio (`db`/`redis`), ya que dentro del
+contenedor `localhost` es el propio contenedor. Secretos interpolados del `.env`.
+
 ---
 
 ## Configuración local
@@ -104,6 +119,7 @@ entre lo planificado y lo que realmente ocurrió.
 - PostgreSQL 16
 - Maven
 - Redis (via WSL2/Ubuntu, Docker, o Memurai)
+- Docker Desktop (opcional, para el entorno orquestado con docker-compose)
 
 ### Variables de entorno
 Crear archivo `.env` en la raíz del proyecto:
@@ -122,6 +138,31 @@ CREATE DATABASE task_manager_db;
 La app levanta en http://localhost:8080
 Flyway crea las tablas automáticamente al primer arranque.
 
+## Ejecutar con Docker (entorno local orquestado)
+
+Levanta la app, PostgreSQL y Redis juntos con un solo comando, sin
+depender de los servicios instalados en el host:
+
+```bash
+docker compose up --build
+```
+
+Antes de levantarlo, **detén el backend de IntelliJ** si lo tienes
+corriendo: el compose expone el 8080 del host y chocaría con el de
+IntelliJ. (El PostgreSQL de Windows y el Redis de WSL no hace falta
+tocarlos: el compose no expone esos puertos.)
+
+La base del compose arranca vacía, así que la primera vez registra un
+usuario nuevo con `POST /api/auth/register` antes de probar el resto.
+Para bajar todo:
+
+```bash
+docker compose down
+```
+
+Los datos del PostgreSQL del compose se conservan en el volumen
+`postgres_data` entre levantadas; `docker compose down -v` los borra.
+
 ---
 
 ## Endpoints Sprint 1 — Auth
@@ -134,13 +175,13 @@ Flyway crea las tablas automáticamente al primer arranque.
 | GET | /api/auth/profile | Bearer | Perfil del usuario |
 
 ### Ejemplo registro
-curl -X POST http://localhost:8080/api/auth/register 
--H "Content-Type: application/json" 
+curl -X POST http://localhost:8080/api/auth/register
+-H "Content-Type: application/json"
 -d '{"username":"katerina","email":"katerina@test.com","password":"123456"}'
 
 ### Ejemplo login
-curl -X POST http://localhost:8080/api/auth/login 
--H "Content-Type: application/json" 
+curl -X POST http://localhost:8080/api/auth/login
+-H "Content-Type: application/json"
 -d '{"email":"katerina@test.com","password":"123456"}'
 
 ---
@@ -180,10 +221,10 @@ http://localhost:8080/swagger-ui/index.html
 ---
 ## Estado del proyecto
 
-### Sprint 1 — Backend Auth completado
+### Sprint 1 — Completado
+**Backend (Auth):**
 - [x] Setup Spring Boot + dependencias
 - [x] Entidades JPA (User, Task) con auditoría y soft delete
-- [x] Flyway V1 — migración inicial
 - [x] Repositories (UserRepository, TaskRepository)
 - [x] DTOs (Register, Login, AuthResponse, UserProfile, Task)
 - [x] JwtService — generación y validación de tokens
@@ -192,11 +233,17 @@ http://localhost:8080/swagger-ui/index.html
 - [x] AuthController — register, login, refresh, profile
 - [x] GlobalExceptionHandler
 
-### Sprint 1 — Listo!
-- [x] QA Tests (register, login, refresh, profile)
-- [x] Frontend UX (login, registro, dashboard, modal tarea)
+**Base de datos:**
+- [x] Flyway V1 — migración inicial
 
-### Sprint 2 — Backend y QA completados
+**QA:**
+- [x] Tests (register, login, refresh, profile)
+
+**Frontend:**
+- [x] UX (login, registro, dashboard, modal tarea)
+
+### Sprint 2 — Completado
+**Backend (CRUD de tareas):**
 - [x] POST /api/tasks
 - [x] GET /api/tasks
 - [x] GET /api/tasks/{id}
@@ -207,15 +254,18 @@ http://localhost:8080/swagger-ui/index.html
 - [x] Auditoría automática (@CreatedDate/@LastModifiedDate)
 - [x] TaskMapper con MapStruct
 - [x] Soft delete con @SQLDelete + @SQLRestriction
-- [x] QA Tests (CRUD completo, validaciones, seguridad, soft delete)
 
-### Sprint 2 — Frontend
-- [x] Frontend UX: conectar dashboard al CRUD real
-- [x] Frontend UX: editar/eliminar tarea desde UI
-- [x] Frontend UX: toggle de estado
-- [ ] Frontend UX: feedback visual (loading, toasts) — movido a Sprint 4
+**QA:**
+- [x] Tests (CRUD completo, validaciones, seguridad, soft delete)
 
-### Sprint 3 — Backend completado
+**Frontend:**
+- [x] UX: conectar dashboard al CRUD real
+- [x] UX: editar/eliminar tarea desde UI
+- [x] UX: toggle de estado
+- [ ] UX: feedback visual (loading, toasts) — movido a Sprint 4
+
+### Sprint 3 — Completado
+**Backend (filtros, logout, Swagger):**
 - [x] GET /api/tasks con paginación (Pageable + metadata)
 - [x] GET /api/tasks con ordenamiento (sort=campo,asc|desc)
 - [x] GET /api/tasks con filtrado por status
@@ -224,11 +274,36 @@ http://localhost:8080/swagger-ui/index.html
 - [x] CORS (ya cubierto desde Sprint 1)
 - [x] OpenAPI/Swagger con @Tag y @Operation
 - [x] Variables de entorno REDIS_HOST/REDIS_PORT
-- [x] Índice user_id + status (verificar si ya existe de Sprint 1)
 
-### Sprint 3 — Pendiente
-- [ ] QA Tests (paginación, ordenamiento, filtrado, seguridad, coverage JaCoCo)
-- [ ] Frontend: paginación UI, ordenamiento, filtros, dashboard con tarjetas resumen, responsive, logout
+**Base de datos:**
+- [x] Índice user_id + status (ya existía de Sprint 1)
+- [x] Índice user_id + created_at (V2)
+
+**QA:**
+- [x] Tests (paginación, ordenamiento, filtrado, seguridad, coverage JaCoCo)
+
+**Frontend:**
+- [x] Paginación UI, ordenamiento, filtros, dashboard con tarjetas resumen, responsive, logout
+
+### Sprint 4 — En progreso
+**Deploy / Docker (backend):**
+- [x] Dockerfile multi-stage (build Maven + runtime JRE 17)
+- [x] docker-compose.yml (app + PostgreSQL + Redis orquestados)
+- [ ] BD producción (PostgreSQL en Render/Railway + migraciones Flyway)
+- [ ] Desplegar backend en Render/Railway (servicio web + variables de entorno)
+
+**Frontend (Sprint 4):**
+- [ ] Pulir UI/UX (migración a CSS, toasts/spinners, responsive pixel-perfect)
+- [ ] Tests de integración frontend (registro → login → CRUD)
+
+**QA final:**
+- [ ] Colección Postman exportada (endpoints + ejemplos + variables)
+- [ ] Tests E2E con Newman (Postman CLI)
+- [ ] Validación en producción (endpoints desplegados + conexión BD)
+- [ ] README.md final de ambos repos
+
+**Opcional:**
+- [ ] Rate limiting con Bucket4j (100 req/min)
 
 ---
 
@@ -276,10 +351,19 @@ src/test/java/com/katerinacampos/task_manager/
 │   ├── AuthControllerTest.java
 │   └── TaskControllerTest.java
 └── TaskManagerApplicationTests.java
+
+(raíz del proyecto — deploy / infra)
+Dockerfile
+.dockerignore
+docker-compose.yml
 ```
+
 ## Testing
 
 ### Ejecutar tests
+./mvnw test
+
+El reporte de cobertura de JaCoCo queda en `target/site/jacoco/index.html`.
 
 ### Tests incluidos — Sprint 1
 Los tests de integración usan `@SpringBootTest` con MockMvc y se ejecutan contra la base de datos local.
@@ -309,6 +393,19 @@ Los tests de integración usan `@SpringBootTest` con MockMvc y se ejecutan contr
 
 **Soft delete:**
 - Tarea eliminada no aparece en el listado (filtrada por @SQLRestriction)
+
+### Tests incluidos — Sprint 3
+**Paginación, ordenamiento y filtrado:**
+- Paginación retorna metadata correcta (totalElements, totalPages, number)
+- Ordenamiento por title DESC y createdAt ASC
+- Filtrado por status PENDING y COMPLETED
+
+**Seguridad:**
+- Token en blacklist tras logout retorna 4xx
+
+**Cobertura (JaCoCo):**
+- Umbral configurado: ≥ 70% de líneas (el build falla si baja de eso)
+- Cobertura real alcanzada: ~91.5% de líneas
 
 ### Notas técnicas
 - `@AutoConfigureMockMvc` no existe en Spring Boot 4.x — se construye MockMvc manualmente con `MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build()`
